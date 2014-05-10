@@ -173,8 +173,7 @@ public class MainActivity extends ActionBarActivity
             {
                 map.addMarker(new MarkerOptions().position(new LatLng(0, 0)).title("Hello map!"));
             }*/
-
-            bindService(intent, sConn,Context.BIND_IMPORTANT);
+            
             startService(intent);
 
             return true;
