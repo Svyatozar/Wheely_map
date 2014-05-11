@@ -6,13 +6,22 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.os.Binder;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Message;
 import android.util.Log;
+
+import de.tavendo.autobahn.WebSocketConnection;
+import de.tavendo.autobahn.WebSocketException;
+import de.tavendo.autobahn.WebSocketHandler;
+import de.tavendo.autobahn.WebSocketOptions;
 
 public class PointsService extends Service
 {
     NotificationManager nm;
     ConnectionBinder binder = new ConnectionBinder();
+
+    private final WebSocketConnection mConnection = new WebSocketConnection();
 
     @Override
     public void onCreate()
@@ -26,28 +35,41 @@ public class PointsService extends Service
     @Override
     public int onStartCommand(Intent intent, int flags, int startId)
     {
-        Thread t = new Thread(new Runnable()
+
+        final String wsuri = "ws://mini-mdt.wheely.com/?username=atr&password=atr";
+
+        try
         {
-            @Override
-            public void run()
+            mConnection.connect(wsuri, new WebSocketHandler()
             {
-                for (int i = 0;i < 150; i++)
+
+                @Override
+                public void onOpen()
                 {
-                    Log.i("LOG","Signal^"+i);
-
-                    try
-                    {
-                        Thread.sleep(1000);
-                    }
-                    catch (Exception e)
-                    {
-                        Log.i("LOG","Exception sleep");
-                    }
+                    Log.d("LOG", "Status: Connected to " + wsuri);
+                    mConnection.sendTextMessage("{\n" +
+                            "    \"lat\": 55.749792,\n" +
+                            "    \"lon\": 37.632495\n" +
+                            "}");
                 }
-            }
-        });
 
-        t.start();
+                @Override
+                public void onTextMessage(String payload)
+                {
+                    Log.d("LOG", "Got echo: " + payload);
+                    binder.sendCoordinatesInfo("Hi, WebSocket!~" + payload);
+                }
+
+                @Override
+                public void onClose(int code, String reason)
+                {
+                    Log.d("LOG", "Connection lost.");
+                }
+            });
+        } catch (WebSocketException e) {
+
+            Log.d("LOG", e.toString());
+        }
 
         return START_STICKY;
     }
@@ -73,7 +95,15 @@ public class PointsService extends Service
     public IBinder onBind(Intent intent)
     {
         Log.i("LOG","onBind");
-        return null;
+        return binder;
+    }
+
+    /**
+     * Interface to receive coordinates from server
+     */
+    public interface CoordinatesReceiver
+    {
+        void onCoordinatesReceived(String info);
     }
 
     /**
@@ -81,6 +111,25 @@ public class PointsService extends Service
      */
     class ConnectionBinder extends Binder
     {
+        private CoordinatesReceiver listener = null;
+
+        /**
+         * Handler for send message from other thread
+         */
+        private Handler handler = new Handler()
+        {
+            public void handleMessage(android.os.Message msg)
+            {
+                String info = (String)msg.obj;
+                listener.onCoordinatesReceived(info);
+            }
+        };
+
+        /**
+         * Message code for handleMessage
+         */
+        private final int MESSAGE_CODE = 0;
+
         /**
          * Initialise network activity
          * @return success or not
@@ -91,12 +140,41 @@ public class PointsService extends Service
         }
 
         /**
+         * Send coordinates info to listener
+         * @param info
+         */
+        void sendCoordinatesInfo(String info)
+        {
+            if (null != listener)
+            {
+                Message msg = handler.obtainMessage(MESSAGE_CODE,info);
+                handler.sendMessage(msg);
+            }
+        }
+
+        /**
+         * Register to receive coordinates info
+         * @param listener
+         */
+        void registerObserver(CoordinatesReceiver listener)
+        {
+            this.listener = listener;
+        }
+
+        /**
          * Stop network activity
          * @return success or not
          */
         boolean stop()
         {
-            return true;
+            if (null != mConnection)
+            {
+                mConnection.disconnect();
+
+                return mConnection.isConnected();
+            }
+
+            return false;
         }
     }
 }

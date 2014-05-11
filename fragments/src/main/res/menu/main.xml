@@ -10,5 +10,10 @@
             android:title="@string/action_example"
             android:icon="@android:drawable/ic_dialog_map"
             app:showAsAction="withText|always" />
+
+        <item android:id="@+id/action_stop"
+              android:title="@string/stop_action"
+              android:icon="@android:drawable/ic_dialog_alert"
+              app:showAsAction="withText|always" />
     </group>
 </menu>

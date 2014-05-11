@@ -5,6 +5,7 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.support.v4.app.Fragment;
@@ -25,9 +26,8 @@ import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 
 public class MainActivity extends ActionBarActivity
-                          implements NavigationDrawerFragment.NavigationDrawerCallbacks,GoogleMapFragment.OnGoogleMapFragmentListener
+implements NavigationDrawerFragment.NavigationDrawerCallbacks,GoogleMapFragment.OnGoogleMapFragmentListener,PointsService.CoordinatesReceiver
 {
-
     /**
      * Map fragment
      */
@@ -38,12 +38,44 @@ public class MainActivity extends ActionBarActivity
     GoogleMap map;
 
     /**
+     * Bridge to service lol
+     */
+    private PointsService.ConnectionBinder service_binder;
+
+    /**
      * Selected item from drawer
      */
     private int current_selected_position = 0;
 
-    ServiceConnection sConn;
+    /**
+     * Intent to launch service
+     */
     Intent intent;
+
+    /**
+     * Connector to service
+     */
+    ServiceConnection sConn;
+    {
+        sConn = new ServiceConnection()
+        {
+
+            public void onServiceConnected(ComponentName name, IBinder binder)
+            {
+                Log.d("LOG", "MainActivity onServiceConnected");
+
+                service_binder = (PointsService.ConnectionBinder) binder;
+                service_binder.registerObserver(MainActivity.this);
+            }
+
+            public void onServiceDisconnected(ComponentName name)
+            {
+                Log.d("LOG", "MainActivity onServiceDisconnected");
+
+                service_binder = null;
+            }
+        };
+    }
 
     /**
      * Fragment managing the behaviors, interactions and presentation of the navigation drawer.
@@ -68,26 +100,19 @@ public class MainActivity extends ActionBarActivity
         mNavigationDrawerFragment.setUp(R.id.navigation_drawer, (DrawerLayout) findViewById(R.id.drawer_layout));
 
         intent = new Intent(this, PointsService.class);
-        sConn = new ServiceConnection() {
 
-            public void onServiceConnected(ComponentName name, IBinder binder)
-            {
-                Log.d("LOG", "MainActivity onServiceConnected");
-                //myService = ((MyService.MyBinder) binder).getService();
-                //bound = true;
-            }
-
-            public void onServiceDisconnected(ComponentName name)
-            {
-                Log.d("LOG", "MainActivity onServiceDisconnected");
-                //bound = false;
-            }
-        };
+        /**
+         * Bind service for high-related status
+         */
+        if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH)
+            bindService(intent, sConn, Context.BIND_IMPORTANT);
+        else
+            bindService(intent, sConn, 0);
     }
 
     @Override
     /**
-     * !!!!!!!!!!!!!!!!!!!!!!!!!! Here selecting a frame
+     * Here selecting a frame
      */
     public void onNavigationDrawerItemSelected(int position)
     {
@@ -162,22 +187,26 @@ public class MainActivity extends ActionBarActivity
     @Override
     public boolean onOptionsItemSelected(MenuItem item)
     {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
+        // Handle action bar item clicks here.
 
-        if (item.getItemId() == R.id.action_example)
+        switch (item.getItemId())
         {
-            /*
-            if (null != map)
+            case R.id.action_example:
             {
-                map.addMarker(new MarkerOptions().position(new LatLng(0, 0)).title("Hello map!"));
-            }*/
-            
-            startService(intent);
+                startService(intent);
 
-            return true;
+                return true;
+            }
+
+            case R.id.action_stop:
+            {
+                service_binder.stop();
+                stopService(intent);
+
+                return true;
+            }
         }
+
         return super.onOptionsItemSelected(item);
     }
 
@@ -194,6 +223,20 @@ public class MainActivity extends ActionBarActivity
     public void onClick(View v)
     {
         Toast.makeText(this,"CLICK",Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
+    public void onCoordinatesReceived(String info)
+    {
+        /*
+        int point = Integer.parseInt(info);
+
+        if (null != map)
+        {
+            map.addMarker(new MarkerOptions().position(new LatLng(0, point)).title("Test point"));
+        }*/
+
+        Toast.makeText(this,info,Toast.LENGTH_SHORT).show();
     }
 
     /**
