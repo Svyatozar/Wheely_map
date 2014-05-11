@@ -71,8 +71,6 @@ implements NavigationDrawerFragment.NavigationDrawerCallbacks,GoogleMapFragment.
             public void onServiceDisconnected(ComponentName name)
             {
                 Log.d("LOG", "MainActivity onServiceDisconnected");
-
-                service_binder = null;
             }
         };
     }
@@ -101,13 +99,7 @@ implements NavigationDrawerFragment.NavigationDrawerCallbacks,GoogleMapFragment.
 
         intent = new Intent(this, PointsService.class);
 
-        /**
-         * Bind service for high-related status
-         */
-        if (android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.ICE_CREAM_SANDWICH)
-            bindService(intent, sConn, Context.BIND_IMPORTANT);
-        else
-            bindService(intent, sConn, 0);
+        bindService(intent,sConn,0);
     }
 
     @Override
@@ -153,7 +145,8 @@ implements NavigationDrawerFragment.NavigationDrawerCallbacks,GoogleMapFragment.
         }
     }
 
-    public void restoreActionBar() {
+    public void restoreActionBar()
+    {
         ActionBar actionBar = getSupportActionBar();
         actionBar.setNavigationMode(ActionBar.NAVIGATION_MODE_STANDARD);
         actionBar.setDisplayShowTitleEnabled(true);
@@ -170,17 +163,10 @@ implements NavigationDrawerFragment.NavigationDrawerCallbacks,GoogleMapFragment.
             menu.setGroupVisible(R.id.groupVsbl, true);
         else
             menu.setGroupVisible(R.id.groupVsbl, false);
-/*
-        if (null != mNavigationDrawerFragment)
-            if (!mNavigationDrawerFragment.isDrawerOpen())
-            {
-                // Only show items in the action bar relevant to this screen
-                // if the drawer is not showing. Otherwise, let the drawer
-                // decide what to show in the action bar.
-                getMenuInflater().inflate(R.menu.main, menu);
-                restoreActionBar();
-                return true;
-            }*/
+
+        ActionBar actionBar = getSupportActionBar();
+        actionBar.setTitle(mTitle);
+
         return true;
     }
 
@@ -193,15 +179,15 @@ implements NavigationDrawerFragment.NavigationDrawerCallbacks,GoogleMapFragment.
         {
             case R.id.action_example:
             {
-                startService(intent);
+                service_binder.start();
 
                 return true;
             }
 
             case R.id.action_stop:
             {
-                service_binder.stop();
-                stopService(intent);
+                if (null != service_binder)
+                    service_binder.stop();
 
                 return true;
             }

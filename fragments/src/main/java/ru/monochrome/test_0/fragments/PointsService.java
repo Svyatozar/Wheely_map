@@ -14,10 +14,12 @@ import android.util.Log;
 import de.tavendo.autobahn.WebSocketConnection;
 import de.tavendo.autobahn.WebSocketException;
 import de.tavendo.autobahn.WebSocketHandler;
-import de.tavendo.autobahn.WebSocketOptions;
 
 public class PointsService extends Service
 {
+    private static final int NOTIFICATION_ID = 7;
+    private final String WS_URI = "ws://mini-mdt.wheely.com/";
+
     NotificationManager nm;
     ConnectionBinder binder = new ConnectionBinder();
 
@@ -29,24 +31,23 @@ public class PointsService extends Service
         Log.i("LOG","onCreateService");
 
         nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
-        sendNotif();
     }
 
-    @Override
-    public int onStartCommand(Intent intent, int flags, int startId)
+    /**
+     * Connect to server and sell received data to binder
+     * @param uri
+     */
+    private void startConnection(String uri)
     {
-
-        final String wsuri = "ws://mini-mdt.wheely.com/?username=atr&password=atr";
-
         try
         {
-            mConnection.connect(wsuri, new WebSocketHandler()
+            mConnection.connect(uri, new WebSocketHandler()
             {
 
                 @Override
                 public void onOpen()
                 {
-                    Log.d("LOG", "Status: Connected to " + wsuri);
+                    Log.d("LOG", "Status: Connected to " + WS_URI);
                     mConnection.sendTextMessage("{\n" +
                             "    \"lat\": 55.749792,\n" +
                             "    \"lon\": 37.632495\n" +
@@ -66,35 +67,41 @@ public class PointsService extends Service
                     Log.d("LOG", "Connection lost.");
                 }
             });
-        } catch (WebSocketException e) {
-
+        }
+        catch (WebSocketException e)
+        {
             Log.d("LOG", e.toString());
         }
-
-        return START_STICKY;
     }
 
-    void sendNotif()
+    /**
+     * Start foreground service
+     */
+    void godModeOn()
     {
-        // 1-я часть
-        Notification notif = new Notification(R.drawable.ic_launcher, "Test Service",System.currentTimeMillis());
+        Notification notification = new Notification(R.drawable.ic_launcher, "Test Service",System.currentTimeMillis());
 
-        // 3-я часть
         Intent intent = new Intent(this, MainActivity.class);
         PendingIntent pIntent = PendingIntent.getActivity(this, 0, intent, 0);
 
-        // 2-я часть
-        notif.setLatestEventInfo(this, "Test", "Service is work", pIntent);
+        notification.setLatestEventInfo(this, "Test", "Service is work", pIntent);
 
-        // отправляем
-        //nm.notify(1, notif);
-        startForeground(7,notif);
+        startForeground(NOTIFICATION_ID, notification);
+    }
+
+    /**
+     * Stop foreground magic
+     */
+    void godModeOff()
+    {
+        stopForeground(true);
     }
 
     @Override
     public IBinder onBind(Intent intent)
     {
         Log.i("LOG","onBind");
+
         return binder;
     }
 
@@ -136,7 +143,15 @@ public class PointsService extends Service
          */
         boolean start()
         {
-            return true;
+            if (!mConnection.isConnected())
+            {
+                godModeOn();
+                startConnection(WS_URI + "?username=atr&password=atr");
+
+                return true;
+            }
+            else
+                return false;
         }
 
         /**
@@ -167,6 +182,8 @@ public class PointsService extends Service
          */
         boolean stop()
         {
+            godModeOff();
+
             if (null != mConnection)
             {
                 mConnection.disconnect();
