@@ -1,6 +1,8 @@
 package ru.monochrome.test_0.fragments;
 
+import android.app.Notification;
 import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Intent;
 import android.location.Location;
@@ -18,6 +20,7 @@ public class PointsService extends Service
 {
     public static final String ACTION= "mono_service.gps.receive_action";
     public static final String ARGUMENT_FOR_ACTION= "info_arg";
+    public static final int NOTIFICATION_ID = 7;
 
     /**
      * for detect when not need to restore connection
@@ -27,6 +30,7 @@ public class PointsService extends Service
     private final String WS_URI = "ws://mini-mdt.wheely.com/";
 
     private LocationManager locationManager;
+    SettingsProvider settings;
 
     private static volatile WebSocketConnection mConnection = new WebSocketConnection();
     private WebSocketHandler socketHandler = new WebSocketHandler()
@@ -97,6 +101,7 @@ public class PointsService extends Service
         Log.i("LOG","onCreateService");
 
         locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+        settings = new SettingsProvider(getApplicationContext());
 
         // Listen location updates
         locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 10, locationListener);
@@ -110,6 +115,8 @@ public class PointsService extends Service
 
         isServiceStopped = true;
 
+        godModeOff();
+
         mConnection.disconnect();
         Log.d("LOG", "MyService onDestroy");
     }
@@ -122,7 +129,9 @@ public class PointsService extends Service
         if (isServiceStopped)
         {
             isServiceStopped = false;
-            
+
+            godModeOn();
+
             startConnection(WS_URI); //entry point
             Log.d("LOG", "MyService onStartCommand START CONNECTION");
         }
@@ -136,7 +145,34 @@ public class PointsService extends Service
      */
     private String getAuthorizationString()
     {
-        return "?username=atr&password=atr";
+        String[] access_info = settings.getAccessData();
+
+        Log.d("LOG", "ACCESS INFO: " + access_info[0] + " | " + access_info[1]);
+
+        return "?username=" + access_info[0]+"&password="+access_info[1];
+    }
+
+    /**
+     * Start foreground service
+     */
+    void godModeOn()
+    {
+        Notification notification = new Notification(R.drawable.ic_launcher, "Test Service",System.currentTimeMillis());
+
+        Intent intent = new Intent(this, MainActivity.class);
+        PendingIntent pIntent = PendingIntent.getActivity(this, 0, intent, 0);
+
+        notification.setLatestEventInfo(this, "Test", "Service is work", pIntent);
+
+        startForeground(NOTIFICATION_ID, notification);
+    }
+
+    /**
+     * Stop foreground magic
+     */
+    void godModeOff()
+    {
+        stopForeground(true);
     }
 
     /**

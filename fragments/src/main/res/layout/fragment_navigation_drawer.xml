@@ -3,7 +3,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:choiceMode="singleChoice"
-    android:divider="@android:color/holo_blue_light"
+    android:divider="@android:color/white"
     android:dividerHeight="1dp"
-    android:background="#48D1CC"
+    android:background="#222222"
     tools:context="ru.monochrome.test_0.fragments.NavigationDrawerFragment" />

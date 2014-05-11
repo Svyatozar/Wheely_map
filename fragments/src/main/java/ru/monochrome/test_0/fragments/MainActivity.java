@@ -17,11 +17,20 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.EditText;
 import android.widget.Toast;
 
+import com.google.android.gms.maps.CameraUpdate;
+import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
+
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
+import static com.google.android.gms.maps.CameraUpdateFactory.newLatLngZoom;
 
 public class MainActivity extends ActionBarActivity
 implements NavigationDrawerFragment.NavigationDrawerCallbacks,GoogleMapFragment.OnGoogleMapFragmentListener,PointsService.CoordinatesReceiver
@@ -49,13 +58,15 @@ implements NavigationDrawerFragment.NavigationDrawerCallbacks,GoogleMapFragment.
     // filter for BroadcastReceiver
     IntentFilter intentFilter = new IntentFilter(PointsService.ACTION);
 
+    SettingsProvider settings;
+
     /**
      * Fragment managing the behaviors, interactions and presentation of the navigation drawer.
      */
     private NavigationDrawerFragment mNavigationDrawerFragment;
 
     /**
-     * Used to store the last screen title. For use in {@link #restoreActionBar()}.
+     * Used to store the last screen title.
      */
     private CharSequence mTitle;
 
@@ -64,6 +75,8 @@ implements NavigationDrawerFragment.NavigationDrawerCallbacks,GoogleMapFragment.
     {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        settings = new SettingsProvider(getApplicationContext());
 
         mNavigationDrawerFragment = (NavigationDrawerFragment)getSupportFragmentManager().findFragmentById(R.id.navigation_drawer);
         mTitle = getTitle();
@@ -141,15 +154,6 @@ implements NavigationDrawerFragment.NavigationDrawerCallbacks,GoogleMapFragment.
         }
     }
 
-    public void restoreActionBar()
-    {
-        ActionBar actionBar = getSupportActionBar();
-        actionBar.setNavigationMode(ActionBar.NAVIGATION_MODE_STANDARD);
-        actionBar.setDisplayShowTitleEnabled(true);
-        actionBar.setTitle(mTitle);
-    }
-
-
     @Override
     public boolean onCreateOptionsMenu(Menu menu)
     {
@@ -175,7 +179,6 @@ implements NavigationDrawerFragment.NavigationDrawerCallbacks,GoogleMapFragment.
         {
             case R.id.action_example:
             {
-                //service_binder.start();
                 startService(intent);
                 return true;
             }
@@ -183,6 +186,13 @@ implements NavigationDrawerFragment.NavigationDrawerCallbacks,GoogleMapFragment.
             case R.id.action_stop:
             {
                 stopService(intent);
+
+                return true;
+            }
+
+            case R.id.action_gps:
+            {
+                startActivity(new Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS));
 
                 return true;
             }
@@ -203,21 +213,48 @@ implements NavigationDrawerFragment.NavigationDrawerCallbacks,GoogleMapFragment.
 
     public void onClick(View v)
     {
-        Toast.makeText(this,"CLICK",Toast.LENGTH_SHORT).show();
+        EditText username_field = (EditText)findViewById(R.id.editText);
+        EditText password_field = (EditText)findViewById(R.id.editText2);
+
+        settings.writeAccessData(username_field.getText().toString(),password_field.getText().toString());
+
+        Toast.makeText(this,"Сохранено",Toast.LENGTH_SHORT).show();
     }
 
     @Override
     public void onCoordinatesReceived(String info)
     {
-        /*
-        int point = Integer.parseInt(info);
-
         if (null != map)
         {
-            map.addMarker(new MarkerOptions().position(new LatLng(0, point)).title("Test point"));
-        }*/
+            map.clear();
 
-        Toast.makeText(this,info,Toast.LENGTH_SHORT).show();
+            int MIDDLE_ITEM = 2;
+
+            try // Parse coordinates from json string
+            {
+                JSONArray json = new JSONArray(info);
+
+                for (int i = 0; i < json.length(); i++)
+                {
+                    JSONObject item = json.getJSONObject(i);
+
+                    double latitude = item.getDouble("lat");
+                    double longitude = item.getDouble("lon");
+
+                    map.addMarker(new MarkerOptions().position(new LatLng(latitude, longitude)).title("point " + i));
+
+                    if (i == MIDDLE_ITEM)
+                    {
+                        CameraUpdate cameraUpdate = CameraUpdateFactory.newLatLngZoom(new LatLng(latitude, longitude), 10);
+                        map.animateCamera(cameraUpdate);
+                    }
+                }
+            }
+            catch (JSONException e)
+            {
+                e.printStackTrace();
+            }
+        }
     }
 
     /**
