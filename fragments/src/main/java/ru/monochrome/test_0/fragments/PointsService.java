@@ -3,6 +3,10 @@ package ru.monochrome.test_0.fragments;
 import android.app.NotificationManager;
 import android.app.Service;
 import android.content.Intent;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
+import android.os.Bundle;
 import android.os.IBinder;
 import android.util.Log;
 
@@ -15,24 +19,96 @@ public class PointsService extends Service
     public static final String ACTION= "mono_service.gps.receive_action";
     public static final String ARGUMENT_FOR_ACTION= "info_arg";
 
+    /**
+     * for detect when not need to restore connection
+     */
+    private static volatile boolean isServiceStopped = true;
+
     private final String WS_URI = "ws://mini-mdt.wheely.com/";
 
-    NotificationManager nm;
+    private LocationManager locationManager;
 
-    private static WebSocketConnection mConnection = new WebSocketConnection();
+    private static volatile WebSocketConnection mConnection = new WebSocketConnection();
+    private WebSocketHandler socketHandler = new WebSocketHandler()
+    {
+        @Override
+        public void onOpen()
+        {
+            Log.d("LOG", "Status: Connected to " + WS_URI);
+
+            double[] coordinates = getLastKnownCoordinates();
+
+            sendLocationInfo(coordinates[0],coordinates[1]);
+        }
+
+        @Override
+        public void onTextMessage(String payload)
+        {
+            Log.d("LOG", "Got echo: " + payload);
+
+            Intent broadcast = new Intent(ACTION);
+            broadcast.putExtra(ARGUMENT_FOR_ACTION, payload);
+            sendBroadcast(broadcast);
+
+            broadcast = null;
+        }
+
+        @Override
+        public void onClose(int code, String reason)
+        {
+            Log.d("LOG", "Connection lost." + reason);
+
+            if (!isServiceStopped)
+                restoreConnection(WS_URI);
+        }
+    };
+
+    private LocationListener locationListener = new LocationListener()
+    {
+        @Override
+        public void onLocationChanged(Location location)
+        {
+            sendLocationInfo(location.getLatitude(),location.getLongitude());
+        }
+
+        @Override
+        public void onProviderEnabled(String provider)
+        {
+            double[] coordinates = getLastKnownCoordinates();
+            sendLocationInfo(coordinates[0],coordinates[1]);
+        }
+
+        @Override
+        public void onStatusChanged(String provider, int status, Bundle extras)
+        {
+            Log.i("LOG", "Status: " +  String.valueOf(status));
+        }
+
+        @Override
+        public void onProviderDisabled(String provider)
+        {
+            Log.i("LOG", "Provider disabled: " + provider);
+        }
+    };
 
     @Override
     public void onCreate()
     {
         Log.i("LOG","onCreateService");
 
-        nm = (NotificationManager) getSystemService(NOTIFICATION_SERVICE);
+        locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+
+        // Listen location updates
+        locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, 0, 10, locationListener);
+        locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 10, locationListener);
     }
 
     @Override
     public void onDestroy()
     {
         super.onDestroy();
+
+        isServiceStopped = true;
 
         mConnection.disconnect();
         Log.d("LOG", "MyService onDestroy");
@@ -43,13 +119,70 @@ public class PointsService extends Service
     {
         Log.d("LOG", "MyService onStartCommand");
 
-        if (!mConnection.isConnected())
+        if (isServiceStopped)
         {
-            startConnection(WS_URI + "?username=atr&password=atr");
+            isServiceStopped = false;
+            
+            startConnection(WS_URI); //entry point
             Log.d("LOG", "MyService onStartCommand START CONNECTION");
         }
 
         return START_STICKY;
+    }
+
+    /**
+     * Get username and password in the required form
+     * @return
+     */
+    private String getAuthorizationString()
+    {
+        return "?username=atr&password=atr";
+    }
+
+    /**
+     * Sent location info to server
+     * @param latitude
+     * @param longitude
+     */
+    private void sendLocationInfo(Double latitude, Double longitude)
+    {
+        if (mConnection.isConnected())
+            mConnection.sendTextMessage("{\n" +
+                    "    \"lat\": "+latitude+",\n" +
+                    "    \"lon\": "+longitude+"\n" +
+                    "}");
+
+        Log.i("LOG", "Location sent to server: " + latitude + " || " + longitude);
+    }
+
+    /**
+     * get some info about location
+     * @return [0] - latitude, [1] = longitude
+     */
+    private double[] getLastKnownCoordinates()
+    {
+        Location location = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+
+        // last known coordinates
+        double last_known_latitude;
+        double last_known_longitude;
+
+        if (null == location)
+        {
+            last_known_latitude = 55.749792;
+            last_known_longitude = 37.632495;
+        }
+        else
+        {
+            last_known_latitude = location.getLatitude();
+            last_known_longitude = location.getLongitude();
+        }
+
+        Log.d("LOG", "Last known coordinates: " + last_known_latitude + " || " + last_known_longitude);
+
+        double[] result = {last_known_latitude,last_known_longitude};
+
+        return result;
     }
 
     /**
@@ -60,42 +193,40 @@ public class PointsService extends Service
     {
         try
         {
-            mConnection.connect(uri, new WebSocketHandler()
-            {
-
-                @Override
-                public void onOpen()
-                {
-                    Log.d("LOG", "Status: Connected to " + WS_URI);
-                    mConnection.sendTextMessage("{\n" +
-                            "    \"lat\": 55.749792,\n" +
-                            "    \"lon\": 37.632495\n" +
-                            "}");
-                }
-
-                @Override
-                public void onTextMessage(String payload)
-                {
-                    Log.d("LOG", "Got echo: " + payload);
-
-                    Intent broadcast = new Intent(ACTION);
-                    broadcast.putExtra(ARGUMENT_FOR_ACTION, payload);
-                    sendBroadcast(broadcast);
-
-                    broadcast = null;
-                }
-
-                @Override
-                public void onClose(int code, String reason)
-                {
-                    Log.d("LOG", "Connection lost.");
-                }
-            });
+            mConnection.connect(uri + getAuthorizationString(), socketHandler);
         }
         catch (WebSocketException e)
         {
             Log.d("LOG", e.toString());
         }
+    }
+
+    /**
+     * restore lost connection in other thread
+     */
+    private void restoreConnection(final String uri)
+    {
+        Thread restoreWorker = new Thread(new Runnable()
+        {
+            @Override
+            public void run()
+            {
+                // wait for 2 seconds and try to restore connection
+                try
+                {
+                    Thread.sleep(2000);
+                }
+                catch (InterruptedException e)
+                {
+                    e.printStackTrace();
+                }
+
+                startConnection(uri);
+                Log.d("LOG", "START CONNECTION FROM RESTORE THREAD");
+            }
+        });
+
+        restoreWorker.start();
     }
 
     @Override
