@@ -40,7 +40,8 @@
         <service
             android:name="ru.monochrome.test_0.fragments.PointsService"
             android:enabled="true"
-            android:exported="true">
+            android:exported="true"
+            android:process=":external">
         </service>
     </application>
 

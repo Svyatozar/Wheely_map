@@ -1,13 +1,11 @@
 package ru.monochrome.test_0.fragments;
 
 import android.app.Activity;
-import android.content.ComponentName;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.ServiceConnection;
-import android.os.Build;
+import android.content.IntentFilter;
 import android.os.Bundle;
-import android.os.IBinder;
 import android.support.v4.app.Fragment;
 import android.support.v4.app.FragmentManager;
 import android.support.v4.widget.DrawerLayout;
@@ -38,42 +36,18 @@ implements NavigationDrawerFragment.NavigationDrawerCallbacks,GoogleMapFragment.
     GoogleMap map;
 
     /**
-     * Bridge to service lol
-     */
-    private PointsService.ConnectionBinder service_binder;
-
-    /**
      * Selected item from drawer
      */
     private int current_selected_position = 0;
+
+    BroadcastReceiver br;
 
     /**
      * Intent to launch service
      */
     Intent intent;
-
-    /**
-     * Connector to service
-     */
-    ServiceConnection sConn;
-    {
-        sConn = new ServiceConnection()
-        {
-
-            public void onServiceConnected(ComponentName name, IBinder binder)
-            {
-                Log.d("LOG", "MainActivity onServiceConnected");
-
-                service_binder = (PointsService.ConnectionBinder) binder;
-                service_binder.registerObserver(MainActivity.this);
-            }
-
-            public void onServiceDisconnected(ComponentName name)
-            {
-                Log.d("LOG", "MainActivity onServiceDisconnected");
-            }
-        };
-    }
+    // filter for BroadcastReceiver
+    IntentFilter intentFilter = new IntentFilter(PointsService.ACTION);
 
     /**
      * Fragment managing the behaviors, interactions and presentation of the navigation drawer.
@@ -99,7 +73,29 @@ implements NavigationDrawerFragment.NavigationDrawerCallbacks,GoogleMapFragment.
 
         intent = new Intent(this, PointsService.class);
 
-        bindService(intent,sConn,0);
+        // создаем BroadcastReceiver
+        br = new BroadcastReceiver()
+        {
+            // действия при получении сообщений
+            public void onReceive(Context context, Intent intent)
+            {
+                String result = intent.getStringExtra(PointsService.ARGUMENT_FOR_ACTION);
+                Log.d("LOG", "onReceive: " + result);
+
+                onCoordinatesReceived(result);
+            }
+
+        };
+
+        registerReceiver(br, intentFilter);
+    }
+
+    @Override
+    protected void onDestroy()
+    {
+        super.onDestroy();
+
+        unregisterReceiver(br);
     }
 
     @Override
@@ -179,15 +175,14 @@ implements NavigationDrawerFragment.NavigationDrawerCallbacks,GoogleMapFragment.
         {
             case R.id.action_example:
             {
-                service_binder.start();
-
+                //service_binder.start();
+                startService(intent);
                 return true;
             }
 
             case R.id.action_stop:
             {
-                if (null != service_binder)
-                    service_binder.stop();
+                stopService(intent);
 
                 return true;
             }
