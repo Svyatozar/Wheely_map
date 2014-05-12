@@ -2,11 +2,22 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     tools:context="ru.monochrome.test_0.fragments.MainActivity" >
-    <item android:id="@+id/action_example"
-        android:title="@string/action_example"
-        app:showAsAction="withText|ifRoom" />
-    <item android:id="@+id/action_settings"
-        android:title="@string/action_settings"
-        android:orderInCategory="100"
-        app:showAsAction="never" />
+
+
+    <group
+        android:id="@+id/groupVsbl">
+        <item android:id="@+id/action_example"
+            android:title="@string/action_example"
+            android:icon="@android:drawable/ic_dialog_map"
+            app:showAsAction="withText|always" />
+
+        <item android:id="@+id/action_stop"
+              android:title="@string/stop_action"
+              android:icon="@android:drawable/ic_lock_power_off"
+              app:showAsAction="withText|always" />
+        <item android:id="@+id/action_gps"
+              android:title="@string/gps_action"
+              android:icon="@android:drawable/ic_menu_mylocation"
+              app:showAsAction="withText|always" />
+    </group>
 </menu>
