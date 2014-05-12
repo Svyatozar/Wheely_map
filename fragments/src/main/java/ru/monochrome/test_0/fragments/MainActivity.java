@@ -30,11 +30,21 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import static com.google.android.gms.maps.CameraUpdateFactory.newLatLngZoom;
-
 public class MainActivity extends ActionBarActivity
 implements NavigationDrawerFragment.NavigationDrawerCallbacks,GoogleMapFragment.OnGoogleMapFragmentListener,PointsService.CoordinatesReceiver
 {
+    private static final String LATITUDE = "lat";
+    private static final String LONGITUDE = "lon";
+
+    /**
+     * Middle point in last received coordinates list
+     */
+    private static final int MIDDLE_ITEM = 1;
+    /**
+     * General zoom to show map's points
+     */
+    private static final int GENERAL_ZOOM = 10;
+
     /**
      * Map fragment
      */
@@ -50,6 +60,15 @@ implements NavigationDrawerFragment.NavigationDrawerCallbacks,GoogleMapFragment.
     private int current_selected_position = 0;
 
     BroadcastReceiver br;
+
+    /**
+     * last received coordinates
+     */
+    private double[] last_received_latitude;
+    /**
+     * last received coordinates
+     */
+    private double[] last_received_longitude;
 
     /**
      * Intent to launch service
@@ -228,24 +247,25 @@ implements NavigationDrawerFragment.NavigationDrawerCallbacks,GoogleMapFragment.
         {
             map.clear();
 
-            int MIDDLE_ITEM = 2;
-
             try // Parse coordinates from json string
             {
                 JSONArray json = new JSONArray(info);
+
+                last_received_latitude = new double[json.length()];
+                last_received_longitude = new double[json.length()];
 
                 for (int i = 0; i < json.length(); i++)
                 {
                     JSONObject item = json.getJSONObject(i);
 
-                    double latitude = item.getDouble("lat");
-                    double longitude = item.getDouble("lon");
+                    last_received_latitude[i] = item.getDouble("lat");
+                    last_received_longitude[i] = item.getDouble("lon");
 
-                    map.addMarker(new MarkerOptions().position(new LatLng(latitude, longitude)).title("point " + i));
+                    map.addMarker(new MarkerOptions().position(new LatLng(last_received_latitude[i], last_received_longitude[i])).title("point " + i));
 
                     if (i == MIDDLE_ITEM)
                     {
-                        CameraUpdate cameraUpdate = CameraUpdateFactory.newLatLngZoom(new LatLng(latitude, longitude), 10);
+                        CameraUpdate cameraUpdate = CameraUpdateFactory.newLatLngZoom(new LatLng(last_received_latitude[i], last_received_longitude[i]), GENERAL_ZOOM);
                         map.animateCamera(cameraUpdate);
                     }
                 }
@@ -255,6 +275,45 @@ implements NavigationDrawerFragment.NavigationDrawerCallbacks,GoogleMapFragment.
                 e.printStackTrace();
             }
         }
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState)
+    {
+        super.onSaveInstanceState(outState);
+
+        outState.putDoubleArray(LATITUDE,last_received_latitude);
+        outState.putDoubleArray(LONGITUDE,last_received_longitude);
+
+        Log.d("LOG", "onSaveInstanceState");
+    }
+
+    @Override
+    protected void onRestoreInstanceState(Bundle savedInstanceState)
+    {
+        super.onRestoreInstanceState(savedInstanceState);
+
+        // Restore received points to map
+        last_received_latitude = savedInstanceState.getDoubleArray(LATITUDE);
+        last_received_longitude = savedInstanceState.getDoubleArray(LONGITUDE);
+
+        if ((null != last_received_latitude) && (null != last_received_longitude))
+        {
+            if (null != map)
+            {
+                for (int i = 0;i < last_received_longitude.length;i++)
+                {
+                    map.addMarker(new MarkerOptions().position(new LatLng(last_received_latitude[i], last_received_longitude[i])).title("point " + i));
+                }
+
+                CameraUpdate move_to_point = CameraUpdateFactory.newLatLngZoom
+                        (new LatLng(last_received_latitude[MIDDLE_ITEM], last_received_longitude[MIDDLE_ITEM]), GENERAL_ZOOM);
+
+                map.moveCamera(move_to_point);
+            }
+        }
+
+        Log.d("LOG", "onRestoreInstanceState");
     }
 
     /**
